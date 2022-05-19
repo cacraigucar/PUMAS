@@ -441,7 +441,20 @@ subroutine micro_mg_tend ( &
      errstring, & ! Below arguments are "optional" (pass null pointers to omit).
      tnd_qsnow,          tnd_nsnow,          re_ice,             &
      prer_evap,                                                      &
-     frzimm,             frzcnt,             frzdep)
+     frzimm,             frzcnt,             frzdep,             &
+!++ TAU
+     scale_qc, scale_nc, scale_qr, scale_nr, amk_c, ank_c, amk_r, ank_r, amk, ank, amk_out, ank_out, &
+     qc_out, nc_out, qr_out, nr_out, qctend_MG2, nctend_MG2, qrtend_MG2, nrtend_MG2, &
+     qctend_TAU, nctend_TAU, qrtend_TAU, nrtend_TAU, gmnnn_lmnnn_TAU, qctend_TAU_diag, nctend_TAU_diag, qrtend_TAU_diag, nrtend_TAU_diag, ML_fixer, QC_fixer, NC_fixer, QR_fixer, NR_fixer )
+!-- TAU
+   
+
+!++ TAU
+  use stochastic_collect_tau_cam, only: ncd, stochastic_collect_tau_tend
+  use tau_neural_net_batch, only: tau_emulate_cloud_rain_interactions
+  use cam_logfile,    only: iulog
+  use ML_fixer_check, only: ML_fixer_calc
+!-- TAU
 
   ! Constituent properties.
   use micro_mg_utils, only: &
@@ -529,6 +542,49 @@ subroutine micro_mg_tend ( &
   ! (For example, in CAM, the last dimension is always size 4.)
   real(r8), intent(in) :: rndst(:,:,:)  ! radius of each dust bin, for contact freezing (from microp_aero_ts) (m)
   real(r8), intent(in) :: nacon(:,:,:) ! number in each dust bin, for contact freezing  (from microp_aero_ts) (1/m^3)
+
+!++ TAU
+  real(r8), intent(out) :: scale_qc(mgncol,nlev)
+  real(r8), intent(out) :: scale_nc(mgncol,nlev)
+  real(r8), intent(out) :: scale_qr(mgncol,nlev)
+  real(r8), intent(out) :: scale_nr(mgncol,nlev)
+  real(r8), intent(out) :: amk_c(mgncol,nlev,ncd)
+  real(r8), intent(out) :: ank_c(mgncol,nlev,ncd)
+  real(r8), intent(out) :: amk_r(mgncol,nlev,ncd)
+  real(r8), intent(out) :: ank_r(mgncol,nlev,ncd)
+  real(r8), intent(out) :: amk(mgncol,nlev,ncd)
+  real(r8), intent(out) :: ank(mgncol,nlev,ncd)
+  real(r8), intent(out) :: amk_out(mgncol,nlev,ncd)
+  real(r8), intent(out) :: ank_out(mgncol,nlev,ncd)
+  real(r8), intent(out) :: qc_out(mgncol,nlev)
+  real(r8), intent(out) :: nc_out(mgncol,nlev)
+  real(r8), intent(out) :: qr_out(mgncol,nlev)
+  real(r8), intent(out) :: nr_out(mgncol,nlev)
+  real(r8), intent(out) :: qctend_MG2(mgncol,nlev)
+  real(r8), intent(out) :: nctend_MG2(mgncol,nlev)
+  real(r8), intent(out) :: qrtend_MG2(mgncol,nlev)
+  real(r8), intent(out) :: nrtend_MG2(mgncol,nlev)
+  real(r8), intent(out) :: qctend_TAU(mgncol,nlev)
+  real(r8), intent(out) :: nctend_TAU(mgncol,nlev)
+  real(r8), intent(out) :: qrtend_TAU(mgncol,nlev)
+  real(r8), intent(out) :: nrtend_TAU(mgncol,nlev)  
+  real(r8), intent(out) :: qctend_TAU_diag(mgncol,nlev)
+  real(r8), intent(out) :: nctend_TAU_diag(mgncol,nlev)
+  real(r8), intent(out) :: qrtend_TAU_diag(mgncol,nlev)
+  real(r8), intent(out) :: nrtend_TAU_diag(mgncol,nlev)
+  real(r8), intent(out) :: gmnnn_lmnnn_TAU(mgncol,nlev)
+
+  real(r8) :: qc_eff_r
+  real(r8) :: qr_eff_r
+  real(r8) :: nc_eff_r
+  real(r8) :: nr_eff_r
+  real(r8), intent(out) :: ML_fixer(mgncol,nlev)
+  real(r8), intent(out) :: QC_fixer(mgncol,nlev)
+  real(r8), intent(out) :: NC_fixer(mgncol,nlev)
+  real(r8), intent(out) :: QR_fixer(mgncol,nlev)
+  real(r8), intent(out) :: NR_fixer(mgncol,nlev)
+!-- TAU
+
   
   ! output arguments
 
@@ -1251,6 +1307,17 @@ subroutine micro_mg_tend ( &
   ncai = 0._r8
   nfice = 0._r8
 
+!++ TAU
+  qctend_MG2 = 0._r8
+  nctend_MG2 = 0._r8
+  qrtend_MG2 = 0._r8
+  nrtend_MG2 = 0._r8
+  qctend_TAU = 0._r8
+  nctend_TAU = 0._r8
+  qrtend_TAU = 0._r8
+  nrtend_TAU = 0._r8
+  gmnnn_lmnnn_TAU = 0._r8
+!-- TAU
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   ! droplet activation
   ! get provisional droplet number after activation. This is used for
@@ -1746,6 +1813,32 @@ subroutine micro_mg_tend ( &
         mnudep(:,k)=0._r8
         nnudep(:,k)=0._r8
      end if
+
+!++ TAU
+!    call stochastic_collect_tau_tend(deltatin, t(:,k), rho(:,k), qcn(1:mgncol,k), qrn(1:mgncol,k), & 
+!                                     qcic(1:mgncol,k), ncic(1:mgncol,k), &
+!                                     qric(1:mgncol,k), nric(1:mgncol,k), lcldm(1:mgncol,k), precip_frac(1:mgncol,k), &
+!                                     pgam(1:mgncol,k), lamc(1:mgncol,k), n0r(1:mgncol,k), lamr(1:mgncol,k), &
+!                                     qc_out(1:mgncol,k), nc_out(1:mgncol,k), &
+!                                     qr_out(1:mgncol,k), nr_out(1:mgncol,k), &
+!                                     qctend(1:mgncol,k), nctend(1:mgncol,k), &
+!                                     qrtend(1:mgncol,k), nrtend(1:mgncol,k), &
+!                                     qctend_TAU_diag(1:mgncol,k), nctend_TAU_diag(1:mgncol,k), &
+!                                     qrtend_TAU_diag(1:mgncol,k), nrtend_TAU_diag(1:mgncol,k), &
+!                                     scale_qc(1:mgncol,k), scale_nc(1:mgncol,k), &
+!                                     scale_qr(1:mgncol,k), scale_nr(1:mgncol,k), &
+!                                     amk_c(1:mgncol,k,1:ncd), ank_c(1:mgncol,k,1:ncd), &
+!                                     amk_r(1:mgncol,k,1:ncd), ank_r(1:mgncol,k,1:ncd), &
+!                                     amk(1:mgncol,k,1:ncd), ank(1:mgncol,k,1:ncd), &
+!                                     amk_out(1:mgncol,k,1:ncd), ank_out(1:mgncol,k,1:ncd), gmnnn_lmnnn_TAU(1:mgncol,k), mgncol)
+
+    call tau_emulate_cloud_rain_interactions(qc(1:mgncol,k), nc(1:mgncol,k), qr(1:mgncol,k), nr(1:mgncol,k), rho(1:mgncol,k), &
+                                             lamc(1:mgncol,k), lamr(1:mgncol,k), lcldm(1:mgncol,k), n0r(1:mgncol,k), pgam(1:mgncol,k), precip_frac(1:mgncol,k), &
+                                       qsmall, mgncol, qctend_TAU(1:mgncol,k), qrtend_TAU(1:mgncol,k), nctend_TAU(1:mgncol,k), nrtend_TAU(1:mgncol,k))              
+
+    call ML_fixer_calc(mgncol, deltatin, qc(1:mgncol,k), nc(1:mgncol,k), qr(1:mgncol,k), nr(1:mgncol,k), qctend_TAU(1:mgncol,k), nctend_TAU(1:mgncol,k), qrtend_TAU(1:mgncol,k), &
+                  nrtend_TAU(1:mgncol,k), ML_fixer(1:mgncol,k), QC_fixer(1:mgncol,k), NC_fixer(1:mgncol,k), QR_fixer(1:mgncol,k), NR_fixer(1:mgncol,k))           
+!-- TAU
 
      call snow_self_aggregation(t(:,k), rho(:,k), asn(:,k), rhosn, qsic(:,k), nsic(:,k), &
           nsagg(:,k), mgncol)
@@ -2279,11 +2372,16 @@ subroutine micro_mg_tend ( &
              (mnuccr(i,k)+pracs(i,k)+mnuccri(i,k)+pracg(i,k)+pgracs(i,k)+qmultrg(i,k))*precip_frac(i,k)+ &
                   berg(i,k))*xlf)  
 
-        qctend(i,k) = qctend(i,k)+ &
-             (-pra(i,k)-prc(i,k)-mnuccc(i,k)-mnucct(i,k)-msacwi(i,k)- &
-             psacws(i,k)-bergs(i,k)-qmultg(i,k)-psacwg(i,k)-pgsacw(i,k))*lcldm(i,k)-berg(i,k)
+!        qctend(i,k) = qctend(i,k)+ &
+!             (-pra(i,k)-prc(i,k)-mnuccc(i,k)-mnucct(i,k)-msacwi(i,k)- &
+!             psacws(i,k)-bergs(i,k)-qmultg(i,k)-psacwg(i,k)-pgsacw(i,k))*lcldm(i,k)-berg(i,k)
+        qctend(i,k) = qctend(i,k)+ qctend_TAU(i,k) + &
+             (-mnuccc(i,k)-mnucct(i,k)-msacwi(i,k)- &
+             psacws(i,k)-bergs(i,k))*lcldm(i,k)-berg(i,k)  
 
-
+!++ TAU
+        qctend_MG2(i,k) = (-pra(i,k)-prc(i,k))*lcldm(i,k)
+!-- TAU
         if (do_cldice) then
 
            qitend(i,k) = qitend(i,k)+ &
@@ -2293,9 +2391,16 @@ subroutine micro_mg_tend ( &
  
         end if
 
-        qrtend(i,k) = qrtend(i,k)+ &
-             (pra(i,k)+prc(i,k))*lcldm(i,k)+(pre(i,k)-pracs(i,k)- &
-             mnuccr(i,k)-mnuccri(i,k)-qmultrg(i,k)-pracg(i,k)-pgracs(i,k))*precip_frac(i,k)
+!        qrtend(i,k) = qrtend(i,k)+ &
+!             (pra(i,k)+prc(i,k))*lcldm(i,k)+(pre(i,k)-pracs(i,k)- &
+!             mnuccr(i,k)-mnuccri(i,k)-qmultrg(i,k)-pracg(i,k)-pgracs(i,k))*precip_frac(i,k)
+        qrtend(i,k) = qrtend(i,k)+ qrtend_TAU(i,k)+&
+             (pre(i,k)-pracs(i,k)- &
+             mnuccr(i,k)-mnuccri(i,k))*precip_frac(i,k)
+
+!++ TAU
+       qrtend_MG2(i,k) = (pra(i,k)+prc(i,k))*lcldm(i,k) 
+!-- TAU
 
         if (do_hail.or.do_graupel) then
            qgtend(i,k) = qgtend(i,k) + (pracg(i,k)+pgracs(i,k)+prdg(i,k)+psacr(i,k)+mnuccr(i,k))*precip_frac(i,k) &
@@ -2383,9 +2488,16 @@ subroutine micro_mg_tend ( &
         nmultrgtot(i,k) = nmultrg(i,k)*precip_frac(i,k)
         npsacwgtot(i,k) = npsacwg(i,k)*lcldm(i,k)
 
-        nctend(i,k) = nctend(i,k)+&
+!        nctend(i,k) = nctend(i,k)+&
+!             (-nnuccc(i,k)-nnucct(i,k)-npsacws(i,k)+nsubc(i,k) &
+!             -npra(i,k)-nprc1(i,k))*lcldm(i,k)
+        nctend(i,k) = nctend(i,k)+nctend_TAU(i,k)+&
              (-nnuccc(i,k)-nnucct(i,k)-npsacws(i,k)+nsubc(i,k) &
-             -npra(i,k)-nprc1(i,k)-npsacwg(i,k))*lcldm(i,k)
+             )*lcldm(i,k)        
+
+!++ TAU
+        nctend_MG2(i,k) = (-npra(i,k)-nprc1(i,k)-npsacwg(i,k))*lcldm(i,k)
+!-- TAU
 
         if (do_cldice) then
            if (use_hetfrz_classnuc) then
@@ -2412,9 +2524,16 @@ subroutine micro_mg_tend ( &
                 nsagg(i,k)+nnuccr(i,k))*precip_frac(i,k)+nprci(i,k)*icldm(i,k)
         end if
 
-        nrtend(i,k) = nrtend(i,k)+ &
-             nprc(i,k)*lcldm(i,k)+(nsubr(i,k)-npracs(i,k)-nnuccr(i,k) &
-             -nnuccri(i,k)+nragg(i,k)-npracg(i,k)-ngracs(i,k))*precip_frac(i,k)
+!        nrtend(i,k) = nrtend(i,k)+ &
+!            nprc(i,k)*lcldm(i,k)+(nsubr(i,k)-npracs(i,k)-nnuccr(i,k) &
+!            -nnuccri(i,k)+nragg(i,k))*precip_frac(i,k)
+        nrtend(i,k) = nrtend(i,k)+nrtend_TAU(i,k)+ &
+             (nsubr(i,k)-npracs(i,k)-nnuccr(i,k) &
+             -nnuccri(i,k))*precip_frac(i,k)
+
+!++ TAU
+        nrtend_MG2(i,k) = nprc(i,k)*lcldm(i,k)+nragg(i,k)*precip_frac(i,k)
+!-- TAU
 
         ! make sure that ni at advanced time step does not exceed
         ! maximum (existing N + source terms*dt), which is possible if mtime < deltat
@@ -2670,6 +2789,7 @@ subroutine micro_mg_tend ( &
            call size_dist_param_basic(mg_graupel_props, dumg(i,k), dumng(i,k), &
              lamg(i,k))
         end if
+
             
         if (lamg(i,k).ge.qsmall) then
 
@@ -3553,6 +3673,32 @@ subroutine micro_mg_tend ( &
         if (qr(i,k)+qrtend(i,k)*deltat.lt.qsmall) nrtend(i,k)=-nr(i,k)/deltat
         if (qs(i,k)+qstend(i,k)*deltat.lt.qsmall) nstend(i,k)=-ns(i,k)/deltat
         if (qg(i,k)+qgtend(i,k)*deltat.lt.qsmall) ngtend(i,k)=-ng(i,k)/deltat
+!++ TAU
+!        if(qc(i,k)+qctend(i,k)*deltat.le.0._r8.or.nc(i,k)+nctend(i,k)*deltat.le.0._r8) then
+!           qctend(i,k) = -qc(i,k)/deltat
+!           nctend(i,k) = -nc(i,k)/deltat
+!        end if
+!        if(qr(i,k)+qrtend(i,k)*deltat.le.0._r8.or.nr(i,k)+nrtend(i,k)*deltat.le.0._r8) then
+!           qrtend(i,k) = -qr(i,k)/deltat
+!           nrtend(i,k) = -nr(i,k)/deltat
+!        end if
+
+! cap effective radius at 100 microns & 1000 microns for qc & qr
+!       if(qc(i,k)+qctend(i,k)*deltat.gt.0._r8.or.nc(i,k)+nctend(i,k)*deltat.gt.0._r8) then
+!          qc_eff_r = 100.e-6_r8
+!          nc_eff_r = (qc(i,k)+qctend(i,k)*deltat)/(4._r8/3._r8*pi*qc_eff_r**3.*rhow)
+!          if(nc(i,k)+nctend(i,k)*deltat.lt.nc_eff_r) then
+!             nctend(i,k) = (nc_eff_r-nc(i,k))/deltat
+!          end if
+!       end if
+!       if(qr(i,k)+qrtend(i,k)*deltat.gt.0._r8.or.nr(i,k)+nrtend(i,k)*deltat.gt.0._r8) then
+!          qr_eff_r = 1000.e-6_r8
+!          nr_eff_r = (qr(i,k)+qrtend(i,k)*deltat)/(4._r8/3._r8*pi*qr_eff_r**3.*rhow)
+!          if(nr(i,k)+nrtend(i,k)*deltat.lt.nr_eff_r) then
+!             nrtend(i,k) = (nr_eff_r-nc(i,k))/deltat
+!          end if
+!       end if
+!-- TAU
      end do
   end do
 
@@ -3723,6 +3869,46 @@ subroutine micro_mg_tend ( &
      nfice=0._r8
   end where
 
+
+! TAU check radius
+!  do i=1,mgncol
+!  do k=1,nlev
+!     qc_eff_r = qcn(i,k)+qctend(i,k)*deltatin
+!     nc_eff_r = ncn(i,k)+nctend(i,k)*deltatin
+!     if(qc_eff_r.lt.0._r8) then
+!        write(iulog,*) 'negative qc! ', qc_eff_r, qctend_TAU(i,k), qctend_MG2(i,k), nctend_TAU(i,k), nctend_MG2(i,k)
+!     end if
+
+!     if(nc_eff_r.gt.0._r8) then
+!        qc_eff_r = (qc_eff_r/(4._r8/3._r8*4._r8*pi*rhow*nc_eff_r))**(1._r8/3._r8)*1.e6
+!     end if
+!     if(nc_eff_r.lt.0._r8) then
+!        qc_eff_r = -999._r8
+!     end if
+
+!     if(qc_eff_r.gt.100._r8) then
+!        write(iulog,*) 'qc radius = ', qc_eff_r, qctend_TAU(i,k), qctend_MG2(i,k), nctend_TAU(i,k), nctend_MG2(i,k)
+!     end if
+    
+
+!     qr_eff_r = qrn(i,k)+qrtend(i,k)*deltatin
+!     nr_eff_r = nrn(i,k)+nrtend(i,k)*deltatin
+!     if(qr_eff_r.lt.0._r8) then
+!        write(iulog,*) 'negative qr! ', qr_eff_r, qrtend_TAU(i,k), qrtend_MG2(i,k), nrtend_TAU(i,k), nrtend_MG2(i,k)
+!     end if
+
+!     if(nr_eff_r.gt.0._r8) then
+!        qr_eff_r = (qr_eff_r/(4._r8/3._r8*4._r8*pi*rhow*nr_eff_r))**(1._r8/3._r8)*1.e6
+!     end if
+!     if(nr_eff_r.lt.0._r8) then
+!        qr_eff_r = -999._r8
+!     end if
+
+!     if(qr_eff_r.gt.100._r8) then
+!        write(iulog,*) 'qr radius = ', qr_eff_r, qrtend_TAU(i,k), qrtend_MG2(i,k), nrtend_TAU(i,k), nrtend_MG2(i,k)
+!     end if
+!  end do
+!  end do
 end subroutine micro_mg_tend
 
 !========================================================================
