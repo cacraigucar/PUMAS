@@ -1,9 +1,9 @@
 module stochastic_collect_tau_cam
 ! From Morrison (Lebo, originally TAU bin code)
 ! Gettelman and Chen 2018
-!the subroutines take in air density, air temperature, and the bin mass boundaries, and 
+!the subroutines take in air density, air temperature, and the bin mass boundaries, and
 !output the mass and number mixing ratio tendencies in each bin directly.
-!this is then wrapped for CAM. 
+!this is then wrapped for CAM.
 
 ! note, this is now coded locally. Want the CAM interface to be over i,k I think.
 
@@ -13,10 +13,10 @@ use shr_spfn_mod, only: gamma => shr_spfn_gamma
 
 !use statements here
 !use
-  
+
 use shr_kind_mod,   only: r8=>shr_kind_r8
 use cam_history,    only: addfld
-use micro_mg_utils, only: pi, rhow, qsmall
+use micro_pumas_utils, only: pi, rhow, qsmall
 use cam_logfile,    only: iulog
 
 implicit none
@@ -46,46 +46,46 @@ integer, parameter, public  :: ncdpl = ncdl+1
 real(r8), private :: knn(ncd,ncd)
 
 real(r8), public :: mmean(ncd), diammean(ncd)       ! kg & m at bin mid-points
-real(r8), public :: medge(ncdp), diamedge(ncdp)     ! kg & m at bin edges 
+real(r8), public :: medge(ncdp), diamedge(ncdp)     ! kg & m at bin edges
 integer, private  :: cutoff_id                       ! cutoff between cloud water and rain drop, D = 40 microns
 
 !===============================================================================
 contains
 !===============================================================================
 
-      
-subroutine calc_bins    
+
+subroutine calc_bins
 
 real(r8) :: DIAM(ncdp)
 real(r8) :: X(ncdp)
 real(r8) :: radsl(ncdp)
 real(r8) :: radl(ncd)
-integer  :: L, lcl  
+integer  :: L, lcl
 real(r8) :: kkfac
-!Then before doing any calculations you'll need to calculate the bin mass grid 
-! (note this code could be cleaned up, I'm just taking it as it's used in our bin scheme). 
-! This only needs to be done once, since we'll use the same bin mass grid for all calculations. 
+!Then before doing any calculations you'll need to calculate the bin mass grid
+! (note this code could be cleaned up, I'm just taking it as it's used in our bin scheme).
+! This only needs to be done once, since we'll use the same bin mass grid for all calculations.
 
 ! use mass doubling bins from Graham Feingold (note cgs units)
 
 !      PI=3.14159_r8
 !      rho_w=1000._r8                         ! kg/m3
       DIAM(1)=1.5625*2.E-04_r8                ! cm
-      X(1)=PI/6._r8*DIAM(1)**3*rhow/1000._r8  ! rhow kg/m3 --> g/cm3 
-      radsl(1) = X(1)                         ! grams 
-!      radsl(1) = X(1)/1000._r8       
+      X(1)=PI/6._r8*DIAM(1)**3*rhow/1000._r8  ! rhow kg/m3 --> g/cm3
+      radsl(1) = X(1)                         ! grams
+!      radsl(1) = X(1)/1000._r8
 
       DO l=2,ncdp
          X(l)=2._r8*X(l-1)
          DIAM(l)=(6._r8/pi*X(l)*1000._r8/rhow)**(1._r8/3._r8)  ! cm
 !         radsl(l)=X(l)/1000._r8 ! convert from g to kg
-         radsl(l)=X(l)             
+         radsl(l)=X(l)
       ENDDO
 
 ! now get bin mid-points
 
       do l=1,ncd
-         radl(l)=(radsl(l)+radsl(l+1))/2._r8         ! grams   
+         radl(l)=(radsl(l)+radsl(l+1))/2._r8         ! grams
 !         diammean(l) = (DIAM(l)+DIAM(l+1))/2._r8     ! cm
          diammean(l) = (6._r8/pi*radl(l)*1000._r8/rhow)**(1._r8/3._r8) ! cm
       end do
@@ -102,16 +102,16 @@ real(r8) :: kkfac
 
       do lcl = 1,ncd
 !         mmean(lcl) = radl(lcl)*1000._r8
-         mmean(lcl) = radl(lcl)  
+         mmean(lcl) = radl(lcl)
          diammean(lcl) = diammean(lcl)
       enddo
 
       do lcl = ncdp,1,-1
          if( diamedge(lcl).ge.40.e-4_r8 ) cutoff_id = lcl
-      end do  
+      end do
 
       write(*,*) 'cutoff_id = ', cutoff_id
-         
+
 end subroutine calc_bins
 
 subroutine stochastic_kernel_init
@@ -134,11 +134,11 @@ subroutine stochastic_kernel_init
     call addfld('amk_out',(/'lev','bins_ncd'/),'A','kg','all liquid mass from bins')
     call addfld('ank_out',(/'lev','bins_ncd'/),'A','1/kg','all liquid number concentration from bins')
 
-    call addfld('scale_nc',(/'lev'/),'A','1','scaling factor for nc') 
-    call addfld('scale_nr',(/'lev'/),'A','1','scaling factor for nr') 
-    call addfld('scale_qc',(/'lev'/),'A','1','scaling factor for qc') 
+    call addfld('scale_nc',(/'lev'/),'A','1','scaling factor for nc')
+    call addfld('scale_nr',(/'lev'/),'A','1','scaling factor for nr')
+    call addfld('scale_qc',(/'lev'/),'A','1','scaling factor for qc')
     call addfld('scale_qr',(/'lev'/),'A','1','scaling factor for qr')
- 
+
     call addfld('QC_TAU_in',(/'lev'/),'A','kg/kg','qc in TAU')
     call addfld('NC_TAU_in',(/'lev'/),'A','1/kg','nc in TAU')
     call addfld('QR_TAU_in',(/'lev'/),'A','kg/kg','qr in TAU')
@@ -146,15 +146,15 @@ subroutine stochastic_kernel_init
     call addfld('QC_TAU_out',(/'lev'/),'A','kg/kg','qc out TAU')
     call addfld('NC_TAU_out',(/'lev'/),'A','1/kg','nc out TAU')
     call addfld('QR_TAU_out',(/'lev'/),'A','kg/kg','qr out TAU')
-    call addfld('NR_TAU_out',(/'lev'/),'A','1/kg','nr out TAU')  
-   
-    call addfld('qctend_MG2',(/'lev'/),'A','kg/kg/s','qc tendency due to autoconversion & accretion in MG2') 
+    call addfld('NR_TAU_out',(/'lev'/),'A','1/kg','nr out TAU')
+
+    call addfld('qctend_MG2',(/'lev'/),'A','kg/kg/s','qc tendency due to autoconversion & accretion in MG2')
     call addfld('nctend_MG2',(/'lev'/),'A','1/kg/s','nc tendency due to autoconversion & accretion in MG2')
-    call addfld('qrtend_MG2',(/'lev'/),'A','kg/kg/s','qr tendency due to autoconversion & accretion in MG2') 
+    call addfld('qrtend_MG2',(/'lev'/),'A','kg/kg/s','qr tendency due to autoconversion & accretion in MG2')
     call addfld('nrtend_MG2',(/'lev'/),'A','1/kg/s','nr tendency due to autoconversion & accretion in MG2')
-    call addfld('qctend_TAU',(/'lev'/),'A','kg/kg/s','qc tendency due to autoconversion & accretion in MG2') 
+    call addfld('qctend_TAU',(/'lev'/),'A','kg/kg/s','qc tendency due to autoconversion & accretion in MG2')
     call addfld('nctend_TAU',(/'lev'/),'A','1/kg/s','nc tendency due to autoconversion & accretion in MG2')
-    call addfld('qrtend_TAU',(/'lev'/),'A','kg/kg/s','qr tendency due to autoconversion & accretion in MG2') 
+    call addfld('qrtend_TAU',(/'lev'/),'A','kg/kg/s','qr tendency due to autoconversion & accretion in MG2')
     call addfld('nrtend_TAU',(/'lev'/),'A','1/kg/s','nr tendency due to autoconversion & accretion in MG2')
     call addfld('qctend_TAU_diag',(/'lev'/),'A','kg/kg/s','qc tendency due to autoconversion & accretion in MG2')
     call addfld('nctend_TAU_diag',(/'lev'/),'A','1/kg/s','nc tendency due to autoconversion & accretion in MG2')
@@ -201,17 +201,17 @@ subroutine stochastic_collect_tau_tend(deltatin, t,rho, qc, qr, qcin,ncin,qrin,n
                                        amk_c, ank_c, amk_r, ank_r, amk, ank, amk_out, ank_out, gmnnn_lmnnn_TAU, mgncol)
 
 
-!use micro_mg_utils, only: &
+!use micro_pumas_utils, only: &
 !       mg_liq_props, &
 !       mg_rain_props
 
-!use micro_mg_utils, only: &
+!use micro_pumas_utils, only: &
 !       size_dist_param_liq, &
 !       size_dist_param_basic
 
 !inputs: mgncol,nlev,t,rho,qcin,ncin,qrin,nrin
 !outputs: qctend,nctend,qrtend,nrtend
-!not sure if we want to output bins (extra dimension). Good for testing?  
+!not sure if we want to output bins (extra dimension). Good for testing?
 
 integer, intent(in) :: mgncol
 
@@ -293,8 +293,8 @@ cutoff = cutoff_id-1
 !end do
 
 ! First make bins from cam size distribution (bins are diagnostic)
-  
-!call cam_bin_distribute(qcin,ncin,qrin,nrin,medge,amk,ank)  
+
+!call cam_bin_distribute(qcin,ncin,qrin,nrin,medge,amk,ank)
 do i=1,mgncol
 !do k=1,nlev
    call cam_bin_distribute(qc(i), qr(i), qcin(i),ncin(i),qrin(i),nrin(i), &
@@ -307,10 +307,10 @@ do i=1,mgncol
    end if
 !   cutoff(i) = cutoff_id-1
 end do
-  
-!Then call the subroutines that actually do the calculations. The inputs/ouputs are described in comments below. 
 
-!This part of the code needs to be called each time for each process rate calculation 
+!Then call the subroutines that actually do the calculations. The inputs/ouputs are described in comments below.
+
+!This part of the code needs to be called each time for each process rate calculation
 ! (i.e., for each sampled cloud/rain gamma distribution):
 
 ! note: variables passed to compute_column_params are all inputs,
@@ -318,7 +318,7 @@ end do
 
 ! inputs: t --> input air temperature (K)
 !         rho --> input air density (kg/m^3)
-!         medge --> bin mass boundary (g) 
+!         medge --> bin mass boundary (g)
 !         amk --> array of bin mass mixing ratio, i.e., the input drop mass distribution (kg/kg)
 !         ank --> array of bin number mixing ratio, i.e., the input drop number distribution (kg^-1)
 
@@ -326,7 +326,7 @@ end do
 
 ! outputs: gnnnn --> bin number mass mixing tendency gain, array in bins (#/cm^3/s)
 !          lnnnn --> bin number mass mixing tendency loss, array in bins (#/cm^3/s)
-!          gmnnn --> bin mass mixing ratio tendency gain, array in bins (g/cm^3/s) 
+!          gmnnn --> bin mass mixing ratio tendency gain, array in bins (g/cm^3/s)
 !          lmnnn --> bin mass mixing ratio tendency loss, array in bins (g/cm^3/s)
 
 
@@ -375,7 +375,7 @@ do n=1,sub_step
       all_gmnnn = all_gmnnn+gmnnn0(lcl)
       all_lmnnn = all_lmnnn+lmnnn0(lcl)
    end do
- 
+
    if( (all_gmnnn.eq.0._r8).or.(all_lmnnn.eq.0._r8) ) then
      gmnnn0(:) = 0._r8
      lmnnn0(:) = 0._r8
@@ -409,7 +409,7 @@ end do
 
       gmnnn_lmnnn_TAU(i) = gmnnn_lmnnn_TAU(i)+gmnnn(lcl)-lmnnn(lcl)
    end do
-   ! rain 
+   ! rain
    do lcl = cutoff(i)+1, ncd
       qrin_old(i) = qrin_old(i)+amk(i,lcl)
       nrin_old(i) = nrin_old(i)+ank(i,lcl)
@@ -446,10 +446,10 @@ real(r8) :: qc_all, qr_all, qc, nc, qr, nr, mu_c, lambda_c, lambda_r, n0r, lcldm
 real(r8), dimension(ncd) :: amk_c, ank_c, amk_r, ank_r, amk, ank
 integer  :: i
 real(r8) :: phi
-real(r8) :: scale_nc, scale_qc, scale_nr, scale_qr 
+real(r8) :: scale_nc, scale_qc, scale_nr, scale_qr
 
 integer  :: id_max_qc, id_max_qr, cutoff_amk
-real(r8) :: max_qc, max_qr, min_amk 
+real(r8) :: max_qc, max_qr, min_amk
 
 ank_c = 0._r8
 amk_c = 0._r8
@@ -474,10 +474,10 @@ if( (qc_all.gt.qsmall).and.(qc.gt.qsmall) ) then
 do i = 1,ncd
    phi = nc*lambda_c**(mu_c+1._r8)/gamma(mu_c+1._r8)*(diammean(i)*1.e-2_r8)**mu_c*exp(-lambda_c*diammean(i)*1.e-2_r8) ! D cm --> m
    ank_c(i) = phi*(diamedge(i+1)-diamedge(i))*1.e-2_r8                     ! D cm --> m
-   amk_c(i) = phi*(diamedge(i+1)-diamedge(i))*1.e-2_r8*mmean(i)*1.e-3_r8   ! mass in bin g --> kg 
+   amk_c(i) = phi*(diamedge(i+1)-diamedge(i))*1.e-2_r8*mmean(i)*1.e-3_r8   ! mass in bin g --> kg
 
    scale_nc = scale_nc+ank_c(i)
-   scale_qc = scale_qc+amk_c(i) 
+   scale_qc = scale_qc+amk_c(i)
 end do
 
 scale_nc = scale_nc/nc
@@ -508,7 +508,7 @@ end if
 if( (qr_all.gt.qsmall).and.(qr.gt.qsmall) ) then
 do i = 1,ncd
    phi = n0r*exp(-lambda_r*diammean(i)*1.e-2_r8)                   ! D cm --> m
-   ank_r(i) = phi*(diamedge(i+1)-diamedge(i))*1.e-2_r8    ! D cm --> m  
+   ank_r(i) = phi*(diamedge(i+1)-diamedge(i))*1.e-2_r8    ! D cm --> m
    amk_r(i) = phi*(diamedge(i+1)-diamedge(i))*1.e-2_r8*mmean(i)*1.e-3_r8
 
    scale_nr = scale_nr + ank_r(i)
@@ -573,17 +573,17 @@ end if
 
 !this part will take a bit of thinking about.
 !use size distribution parameters (mu, lambda) to generate the values at discrete size points
-!need to also ensure mass conservation  
-  
-  
+!need to also ensure mass conservation
+
+
 end subroutine cam_bin_distribute
 
-         
+
 ! here are the subroutines called above that actually do the collision-coalescence calculations:
 
 ! The Kernel is from Jerry from many moons ago (included)
 
-! I read in the file data and multiply by the summed mass of the individual bins 
+! I read in the file data and multiply by the summed mass of the individual bins
 ! (with a factor of 1.5 so that the values represent the middle of the bin
 
 ! 941 FORMAT(2X,E12.5)
